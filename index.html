@@ -114,14 +114,14 @@ input:checked+.toggle-slider:before{transform:translateX(20px)}
 .sf-save{flex:2;padding:11px;border-radius:10px;background:var(--accent);color:#fff;font-size:13px;font-weight:700}
 
 /* ─── SVG MAP ───────────────────────────────────────────── */
-#map-layout{display:flex;gap:10px;margin-top:12px;align-items:flex-start}
-#svg-wrap{border-radius:14px;overflow:hidden;width:220px;flex-shrink:0;background:transparent}
+#map-layout{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+#svg-wrap{border-radius:14px;overflow:hidden;width:100%;background:transparent;max-width:500px;margin:0 auto}
 #svg-wrap svg{width:100%;height:auto;display:block}
 .muscle-group{fill:transparent;stroke:var(--svg-stroke);stroke-width:0.8px;cursor:pointer;transition:fill .3s}
 .muscle-group:hover{fill-opacity:0.3}
 .body-outline{fill:none;stroke:var(--svg-stroke);stroke-miterlimit:10;stroke-width:0.8px}
 
-#map-right{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+#map-right{display:flex;flex-direction:column;gap:8px}
 #muscle-card{background:var(--card);border-radius:14px;padding:12px;border:1px solid var(--border2);display:none}
 .mc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .mc-lbl{font-size:9px;color:var(--text4);letter-spacing:1px}
@@ -1156,11 +1156,13 @@ function calcAndSave(){
   // Göster
   showBFResult(bf, u?.gender||"male");
 
-  // Kaydet
-  const w=parseFloat(document.getElementById("m_weight")?.value)||null;
+  // Tüm ölçümleri topla ve kaydet
   const {full}=getTRDate();
+  const allMeas={};
+  const MFLD_KEYS=["height","neck","weight","arm","shoulder","chest","waist","leg","back","hip"];
+  MFLD_KEYS.forEach(k=>{const el=document.getElementById("m_"+k);if(el&&el.value)allMeas[k]=parseFloat(el.value);});
   const hist=lsGet(uKey("measHist"),[]);
-  hist.unshift({date:full,bf:bf.toFixed(1),weight:w});
+  hist.unshift({date:full, bf:bf.toFixed(1), measurements:allMeas});
   lsSave(uKey("measHist"),hist);
   buildMeasHist();
 }
@@ -1188,19 +1190,33 @@ function showBFResult(bf,gender){
     <div class="bfx"><div class="bfxv">${lean}</div><div class="bfxl">Yağsız Kütle</div></div>`;
 }
 
+const MEAS_LABELS={height:"Boy",neck:"Boyun",weight:"Kilo",arm:"Kol",shoulder:"Omuz",chest:"Göğüs",waist:"Bel",leg:"Bacak",back:"Sırt",hip:"Kalça"};
+const MEAS_UNITS={height:"cm",neck:"cm",weight:"kg",arm:"cm",shoulder:"cm",chest:"cm",waist:"cm",leg:"cm",back:"cm",hip:"cm"};
+
 function buildMeasHist(){
   const hist=lsGet(uKey("measHist"),[]);
   const el=document.getElementById("meas-hist-list");
   if(!hist.length){el.innerHTML='<div style="font-size:12px;color:var(--text4);text-align:center;padding:12px">Henüz kayıt yok</div>';return;}
-  el.innerHTML=hist.map((h,i)=>`
-    <div class="meas-hist-item">
-      <div>
-        <div class="meas-hist-date">${h.date}</div>
-        ${h.weight?`<div style="font-size:10px;color:var(--text4)">${h.weight} kg</div>`:""}
+  el.innerHTML=hist.map((h,i)=>{
+    const col=parseFloat(h.bf)<18?"#00FF88":parseFloat(h.bf)<25?"#FFBB00":"#FF4444";
+    const m=h.measurements||{};
+    const measRows=Object.entries(m).filter(([k,v])=>v).map(([k,v])=>`
+      <span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg4);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--text3);margin:2px">
+        <span style="color:var(--text4)">${MEAS_LABELS[k]||k}:</span>
+        <strong style="color:var(--text)">${v} ${MEAS_UNITS[k]||""}</strong>
+      </span>`).join("");
+    return `<div style="background:var(--bg3);border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid var(--border2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:10px;color:var(--text4)">${h.date}</div>
+          <div style="font-size:22px;font-weight:900;color:${col}">${h.bf}%</div>
+          <div style="font-size:10px;color:var(--text3)">Vücut Yağ Oranı</div>
+        </div>
+        <button class="meas-hist-del" onclick="delMeasHist(${i})" style="background:transparent;border:none;color:var(--text4);font-size:18px;align-self:flex-start">🗑️</button>
       </div>
-      <div class="meas-hist-val" style="color:${parseFloat(h.bf)<18?"#00FF88":parseFloat(h.bf)<25?"#FFBB00":"#FF4444"}">${h.bf}%</div>
-      <button class="meas-hist-del" onclick="delMeasHist(${i})">🗑️</button>
-    </div>`).join("");
+      ${measRows?`<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px">${measRows}</div>`:""}
+    </div>`;
+  }).join("");
 }
 function delMeasHist(i){
   const hist=lsGet(uKey("measHist"),[]);
