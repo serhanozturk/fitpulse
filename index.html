@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>FitPulse — Muscle Tracker</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0A0E1A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#E8ECF8;overflow-x:hidden}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0D1121}
+::-webkit-scrollbar-thumb{background:#2A2E3E;border-radius:2px}
+.dropdown-item:hover{background:#232840 !important}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const e = React.createElement;
+const { useState, useEffect, useRef } = React;
+
+// ─── VERİ ────────────────────────────────────────────────────────
+const MI = {
+  chest:     { name:"Göğüs",      rest:72 },
+  shoulders: { name:"Omuz",       rest:48 },
+  biceps:    { name:"Biceps",     rest:48 },
+  triceps:   { name:"Triceps",    rest:48 },
+  forearms:  { name:"Ön Kol",     rest:24 },
+  abs:       { name:"Karın",      rest:24 },
+  obliques:  { name:"Oblik",      rest:24 },
+  quads:     { name:"Quadriceps", rest:72 },
+  hamstrings:{ name:"Hamstring",  rest:72 },
+  calves:    { name:"Baldır",     rest:48 },
+  back:      { name:"Sırt",       rest:72 },
+  lats:      { name:"Latissimus", rest:72 },
+  traps:     { name:"Trapez",     rest:48 },
+  glutes:    { name:"Kalça",      rest:72 },
+};
+
+const WGER_MAP = {
+  1:["biceps"],2:["shoulders"],3:["lats","back"],4:["chest"],5:["triceps"],
+  6:["abs","obliques"],7:["forearms","calves"],8:["glutes","quads"],9:["traps"],
+  10:["quads","abs"],11:["hamstrings"],12:["back","lats"],13:["shoulders"],14:["calves"],
+};
+
+const DAYS = ["Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi","Pazar"];
+const DK   = ["mon","tue","wed","thu","fri","sat","sun"];
+
+const EX = [
+  {id:1, name:"Squat",                   p:["quads","glutes"],           s:["hamstrings","calves","back"]},
+  {id:2, name:"Deadlift",                p:["back","hamstrings"],        s:["glutes","traps","forearms"]},
+  {id:3, name:"Bench Press",             p:["chest"],                    s:["triceps","shoulders"]},
+  {id:4, name:"Overhead Press",          p:["shoulders"],                s:["triceps","traps"]},
+  {id:5, name:"Pull-Up",                 p:["lats","back"],              s:["biceps","forearms"]},
+  {id:6, name:"Barbell Row",             p:["back","lats"],              s:["biceps","forearms","traps"]},
+  {id:7, name:"Dumbbell Curl",           p:["biceps"],                   s:["forearms"]},
+  {id:8, name:"Tricep Dips",             p:["triceps"],                  s:["chest","shoulders"]},
+  {id:9, name:"Leg Press",               p:["quads","glutes"],           s:["hamstrings","calves"]},
+  {id:10,name:"Romanian Deadlift",       p:["hamstrings","glutes"],      s:["back","calves"]},
+  {id:11,name:"Incline Bench Press",     p:["chest","shoulders"],        s:["triceps"]},
+  {id:12,name:"Cable Fly",               p:["chest"],                    s:["shoulders"]},
+  {id:13,name:"Lateral Raise",           p:["shoulders"],                s:["traps"]},
+  {id:14,name:"Front Raise",             p:["shoulders"],                s:["traps"]},
+  {id:15,name:"Face Pull",               p:["traps","shoulders"],        s:["back"]},
+  {id:16,name:"Hammer Curl",             p:["biceps","forearms"],        s:[]},
+  {id:17,name:"Skull Crusher",           p:["triceps"],                  s:[]},
+  {id:18,name:"Plank",                   p:["abs","obliques"],           s:["back","shoulders"]},
+  {id:19,name:"Crunches",                p:["abs"],                      s:["obliques"]},
+  {id:20,name:"Russian Twist",           p:["obliques"],                 s:["abs"]},
+  {id:21,name:"Leg Raise",               p:["abs"],                      s:["obliques","quads"]},
+  {id:22,name:"Cable Row",               p:["back","lats"],              s:["biceps","traps"]},
+  {id:23,name:"Lat Pulldown",            p:["lats"],                     s:["biceps","back"]},
+  {id:24,name:"T-Bar Row",               p:["back","lats"],              s:["biceps","traps"]},
+  {id:25,name:"Lunges",                  p:["quads","glutes"],           s:["hamstrings","calves"]},
+  {id:26,name:"Hip Thrust",              p:["glutes"],                   s:["hamstrings","quads"]},
+  {id:27,name:"Calf Raise",              p:["calves"],                   s:[]},
+  {id:28,name:"Leg Curl",                p:["hamstrings"],               s:["glutes","calves"]},
+  {id:29,name:"Leg Extension",           p:["quads"],                    s:[]},
+  {id:30,name:"Push-Up",                 p:["chest"],                    s:["triceps","shoulders"]},
+  {id:31,name:"Dumbbell Fly",            p:["chest"],                    s:["shoulders"]},
+  {id:32,name:"Arnold Press",            p:["shoulders"],                s:["triceps"]},
+  {id:33,name:"Upright Row",             p:["traps","shoulders"],        s:["biceps"]},
+  {id:34,name:"Shrugs",                  p:["traps"],                    s:["forearms"]},
+  {id:35,name:"Preacher Curl",           p:["biceps"],                   s:[]},
+  {id:36,name:"Close Grip Bench Press",  p:["triceps"],                  s:["chest"]},
+  {id:37,name:"Tricep Pushdown",         p:["triceps"],                  s:[]},
+  {id:38,name:"Overhead Tricep Ext",     p:["triceps"],                  s:[]},
+  {id:39,name:"Good Morning",            p:["hamstrings","back"],        s:["glutes"]},
+  {id:40,name:"Box Jump",                p:["quads","glutes"],           s:["calves","hamstrings"]},
+  {id:41,name:"Bulgarian Split Squat",   p:["quads","glutes"],           s:["hamstrings","calves"]},
+  {id:42,name:"Cable Crunch",            p:["abs"],                      s:["obliques"]},
+  {id:43,name:"Hanging Leg Raise",       p:["abs","obliques"],           s:["forearms"]},
+  {id:44,name:"Ab Wheel Rollout",        p:["abs"],                      s:["back","shoulders"]},
+  {id:45,name:"Kettlebell Swing",        p:["glutes","hamstrings"],      s:["back","shoulders"]},
+  {id:46,name:"Farmer's Walk",           p:["forearms","traps"],         s:["abs","calves"]},
+  {id:47,name:"Power Clean",             p:["traps","back","shoulders"], s:["quads","glutes"]},
+  {id:48,name:"Dip (Parallel Bar)",      p:["triceps","chest"],          s:["shoulders"]},
+  {id:49,name:"Back Extension",          p:["back","glutes"],            s:["hamstrings"]},
+  {id:50,name:"Nordic Curl",             p:["hamstrings"],               s:["glutes","calves"]},
+  {id:51,name:"Glute Kickback",          p:["glutes"],                   s:["hamstrings"]},
+  {id:52,name:"Reverse Fly",             p:["shoulders","traps"],        s:["back"]},
+  {id:53,name:"Incline Dumbbell Curl",   p:["biceps"],                   s:[]},
+  {id:54,name:"Standing Calf Raise",     p:["calves"],                   s:[]},
+  {id:55,name:"Goblet Squat",            p:["quads","glutes"],           s:["abs","shoulders"]},
+  {id:56,name:"Front Squat",             p:["quads"],                    s:["glutes","abs"]},
+  {id:57,name:"Sumo Deadlift",           p:["glutes","hamstrings"],      s:["quads","back"]},
+  {id:58,name:"Hack Squat",              p:["quads"],                    s:["glutes","hamstrings"]},
+  {id:59,name:"Seal Row",                p:["back","lats"],              s:["biceps"]},
+  {id:60,name:"Straight-Arm Pulldown",   p:["lats"],                     s:["abs"]},
+  {id:61,name:"French Press",            p:["triceps"],                  s:[]},
+  {id:62,name:"Zottman Curl",            p:["biceps","forearms"],        s:[]},
+  {id:63,name:"Spider Curl",             p:["biceps"],                   s:[]},
+  {id:64,name:"Cable Curl",              p:["biceps"],                   s:["forearms"]},
+  {id:65,name:"Bent Over Lat Raise",     p:["shoulders","traps"],        s:["back"]},
+  {id:66,name:"Pike Push-Up",            p:["shoulders"],                s:["triceps"]},
+  {id:67,name:"Step Up",                 p:["quads","glutes"],           s:["hamstrings","calves"]},
+  {id:68,name:"Mountain Climbers",       p:["abs","quads"],              s:["shoulders","calves"]},
+  {id:69,name:"Burpee",                  p:["quads","chest","shoulders"],s:["abs","calves"]},
+  {id:70,name:"Single Arm Row",          p:["lats","back"],              s:["biceps","traps"]},
+  {id:71,name:"Wrist Curl",              p:["forearms"],                 s:[]},
+  {id:72,name:"Chest Supported Row",     p:["back"],                     s:["biceps","traps"]},
+  {id:73,name:"Adductor Machine",        p:["quads"],                    s:["glutes"]},
+  {id:74,name:"Abductor Machine",        p:["glutes"],                   s:["quads"]},
+  {id:75,name:"Smith Machine Squat",     p:["quads","glutes"],           s:["hamstrings"]},
+  {id:76,name:"Pendlay Row",             p:["back","lats"],              s:["biceps","traps"]},
+  {id:77,name:"Battle Rope Waves",       p:["shoulders","chest"],        s:["abs","forearms"]},
+  {id:78,name:"Muscle-Up",               p:["lats","chest","triceps"],   s:["biceps","shoulders"]},
+  {id:79,name:"Sissy Squat",             p:["quads"],                    s:["calves"]},
+  {id:80,name:"Drag Curl",               p:["biceps"],                   s:["forearms"]},
+  {id:81,name:"Cable Kickback",          p:["glutes"],                   s:["hamstrings"]},
+  {id:82,name:"Leg Press (Wide)",        p:["quads","glutes"],           s:["hamstrings"]},
+  {id:83,name:"JM Press",                p:["triceps"],                  s:["chest"]},
+  {id:84,name:"Zercher Squat",           p:["quads","glutes"],           s:["abs","biceps"]},
+  {id:85,name:"Seated Cable Row",        p:["back","lats"],              s:["biceps"]},
+  {id:86,name:"Incline DB Row",          p:["back","lats"],              s:["biceps","traps"]},
+  {id:87,name:"Chest Dip",               p:["chest"],                    s:["triceps","shoulders"]},
+  {id:88,name:"Ab Wheel",                p:["abs"],                      s:["back","shoulders"]},
+  {id:89,name:"Superman Hold",           p:["back","glutes"],            s:["hamstrings","traps"]},
+  {id:90,name:"Hip Abduction",           p:["glutes"],                   s:[]},
+  {id:91,name:"Hip Adduction",           p:["quads"],                    s:[]},
+  {id:92,name:"Reverse Lunge",           p:["quads","glutes"],           s:["hamstrings"]},
+  {id:93,name:"Curtsy Lunge",            p:["quads","glutes"],           s:["hamstrings"]},
+  {id:94,name:"Sumo Squat",              p:["quads","glutes"],           s:["hamstrings","calves"]},
+  {id:95,name:"Frog Pump",               p:["glutes"],                   s:["hamstrings"]},
+  {id:96,name:"Cable Pull Through",      p:["glutes","hamstrings"],      s:["back"]},
+  {id:97,name:"Romanian Split Deadlift", p:["hamstrings","glutes"],      s:["back","calves"]},
+  {id:98,name:"Dumbbell Shrug",          p:["traps"],                    s:["forearms"]},
+  {id:99,name:"Concentration Curl",      p:["biceps"],                   s:[]},
+  {id:100,name:"Tate Press",             p:["triceps"],                  s:[]},
+];
+
+// ─── YARDIMCILAR ─────────────────────────────────────────────────
+function rc(elapsed, total) {
+  if (elapsed >= total) return "#00FF88";
+  const r = elapsed / total;
+  if (r < 0.5) return `rgb(255,${Math.round(255*(r/0.5))},0)`;
+  return `rgb(${Math.round(255*(1-(r-0.5)/0.5))},255,0)`;
+}
+
+function ft(h) {
+  if (h <= 0) return "Hazır ✓";
+  const hh = Math.floor(h), mm = Math.round((h-hh)*60);
+  if (hh===0) return mm+"dk";
+  if (mm===0) return hh+"sa";
+  return hh+"sa "+mm+"dk";
+}
+
+function ls(key, def) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+  catch { return def; }
+}
+function ss(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+// ─── SVG KAS HARİTASI ────────────────────────────────────────────
+function BodyMap({ gender, activeMuscles, onMuscleClick }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n+1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const gc = (m) => {
+    const a = activeMuscles[m];
+    if (!a) return "#232840";
+    return rc((Date.now()-a.startTime)/3600000, MI[m].rest);
+  };
+  const gf = (m) => activeMuscles[m] ? (gender==="male" ? "url(#gm)" : "url(#gf)") : "none";
+  const cl = (m) => (ev) => { ev.stopPropagation(); onMuscleClick(m); };
+  const S = "#161A2E";
+
+  const filterDef = e("defs", null,
+    e("filter", {id: gender==="male" ? "gm" : "gf"},
+      e("feGaussianBlur", {stdDeviation:"2.5", result:"b"}),
+      e("feMerge", null,
+        e("feMergeNode", {in:"b"}),
+        e("feMergeNode", {in:"SourceGraphic"})
+      )
+    )
+  );
+
+  if (gender === "male") {
+    return e("svg", {viewBox:"0 0 220 500", style:{width:"100%",maxHeight:370}},
+      filterDef,
+      // Kafa
+      e("circle",{cx:110,cy:46,r:26,fill:"#1E2235",stroke:S,strokeWidth:1.5}),
+      e("circle",{cx:103,cy:43,r:2.5,fill:"#3A4060"}),
+      e("circle",{cx:117,cy:43,r:2.5,fill:"#3A4060"}),
+      e("path",{d:"M105 54 Q110 59 115 54",stroke:"#3A4060",strokeWidth:1.5,fill:"none",strokeLinecap:"round"}),
+      // Boyun
+      e("rect",{x:100,y:69,width:20,height:18,rx:4,fill:"#1E2235",stroke:S,strokeWidth:1}),
+      // Trapez
+      e("polygon",{points:"88,69 132,69 144,90 76,90",fill:gc("traps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("traps")},onClick:cl("traps")}),
+      // Omuzlar
+      e("ellipse",{cx:70,cy:103,rx:17,ry:20,fill:gc("shoulders"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("shoulders")},onClick:cl("shoulders")}),
+      e("ellipse",{cx:150,cy:103,rx:17,ry:20,fill:gc("shoulders"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("shoulders")},onClick:cl("shoulders")}),
+      // Göğüs
+      e("path",{d:"M90,90 L110,90 L112,135 L88,135 Z",fill:gc("chest"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("chest")},onClick:cl("chest")}),
+      e("path",{d:"M110,90 L130,90 L132,135 L108,135 Z",fill:gc("chest"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("chest")},onClick:cl("chest")}),
+      // Biceps
+      e("rect",{x:54,y:123,width:19,height:50,rx:8,fill:gc("biceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("biceps")},onClick:cl("biceps")}),
+      e("rect",{x:147,y:123,width:19,height:50,rx:8,fill:gc("biceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("biceps")},onClick:cl("biceps")}),
+      // Triceps
+      e("rect",{x:52,y:173,width:17,height:44,rx:6,fill:gc("triceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("triceps")},onClick:cl("triceps")}),
+      e("rect",{x:151,y:173,width:17,height:44,rx:6,fill:gc("triceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("triceps")},onClick:cl("triceps")}),
+      // Önkol
+      e("rect",{x:54,y:217,width:15,height:40,rx:5,fill:gc("forearms"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("forearms")},onClick:cl("forearms")}),
+      e("rect",{x:151,y:217,width:15,height:40,rx:5,fill:gc("forearms"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("forearms")},onClick:cl("forearms")}),
+      // Karın
+      e("rect",{x:91,y:137,width:38,height:52,rx:4,fill:gc("abs"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("abs")},onClick:cl("abs")}),
+      e("line",{x1:110,y1:137,x2:110,y2:189,stroke:S,strokeWidth:1,opacity:0.4}),
+      e("line",{x1:91,y1:155,x2:129,y2:155,stroke:S,strokeWidth:1,opacity:0.4}),
+      e("line",{x1:91,y1:172,x2:129,y2:172,stroke:S,strokeWidth:1,opacity:0.4}),
+      // Oblik
+      e("path",{d:"M88,137 L91,137 L91,189 L82,192 L80,160 Z",fill:gc("obliques"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("obliques")},onClick:cl("obliques")}),
+      e("path",{d:"M129,137 L132,137 L140,160 L138,192 L129,189 Z",fill:gc("obliques"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("obliques")},onClick:cl("obliques")}),
+      // Quads
+      e("rect",{x:83,y:193,width:26,height:84,rx:8,fill:gc("quads"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("quads")},onClick:cl("quads")}),
+      e("rect",{x:111,y:193,width:26,height:84,rx:8,fill:gc("quads"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("quads")},onClick:cl("quads")}),
+      // Baldır
+      e("rect",{x:84,y:283,width:23,height:68,rx:7,fill:gc("calves"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("calves")},onClick:cl("calves")}),
+      e("rect",{x:113,y:283,width:23,height:68,rx:7,fill:gc("calves"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("calves")},onClick:cl("calves")}),
+      // Ayak/El
+      e("ellipse",{cx:95,cy:358,rx:14,ry:7,fill:"#161A2E"}),
+      e("ellipse",{cx:125,cy:358,rx:14,ry:7,fill:"#161A2E"}),
+      e("ellipse",{cx:62,cy:262,rx:9,ry:7,fill:"#161A2E",stroke:S,strokeWidth:1}),
+      e("ellipse",{cx:158,cy:262,rx:9,ry:7,fill:"#161A2E",stroke:S,strokeWidth:1})
+    );
+  } else {
+    return e("svg", {viewBox:"0 0 220 510", style:{width:"100%",maxHeight:370}},
+      filterDef,
+      e("circle",{cx:110,cy:46,r:24,fill:"#1E2235",stroke:S,strokeWidth:1.5}),
+      e("circle",{cx:104,cy:43,r:2.5,fill:"#3A4060"}),
+      e("circle",{cx:116,cy:43,r:2.5,fill:"#3A4060"}),
+      e("path",{d:"M105 54 Q110 58 115 54",stroke:"#3A4060",strokeWidth:1.5,fill:"none",strokeLinecap:"round"}),
+      e("rect",{x:101,y:67,width:18,height:17,rx:4,fill:"#1E2235",stroke:S,strokeWidth:1}),
+      e("polygon",{points:"93,67 127,67 134,86 86,86",fill:gc("traps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("traps")},onClick:cl("traps")}),
+      e("ellipse",{cx:74,cy:100,rx:15,ry:18,fill:gc("shoulders"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("shoulders")},onClick:cl("shoulders")}),
+      e("ellipse",{cx:146,cy:100,rx:15,ry:18,fill:gc("shoulders"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("shoulders")},onClick:cl("shoulders")}),
+      e("ellipse",{cx:99,cy:112,rx:15,ry:13,fill:gc("chest"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("chest")},onClick:cl("chest")}),
+      e("ellipse",{cx:121,cy:112,rx:15,ry:13,fill:gc("chest"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("chest")},onClick:cl("chest")}),
+      e("rect",{x:59,y:118,width:16,height:42,rx:7,fill:gc("biceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("biceps")},onClick:cl("biceps")}),
+      e("rect",{x:145,y:118,width:16,height:42,rx:7,fill:gc("biceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("biceps")},onClick:cl("biceps")}),
+      e("rect",{x:57,y:160,width:15,height:38,rx:6,fill:gc("triceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("triceps")},onClick:cl("triceps")}),
+      e("rect",{x:148,y:160,width:15,height:38,rx:6,fill:gc("triceps"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("triceps")},onClick:cl("triceps")}),
+      e("rect",{x:59,y:198,width:13,height:34,rx:5,fill:gc("forearms"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("forearms")},onClick:cl("forearms")}),
+      e("rect",{x:148,y:198,width:13,height:34,rx:5,fill:gc("forearms"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("forearms")},onClick:cl("forearms")}),
+      e("path",{d:"M95,126 L125,126 L121,184 L99,184 Z",fill:gc("abs"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("abs")},onClick:cl("abs")}),
+      e("line",{x1:110,y1:126,x2:110,y2:184,stroke:S,strokeWidth:1,opacity:0.4}),
+      e("line",{x1:96,y1:150,x2:124,y2:150,stroke:S,strokeWidth:1,opacity:0.4}),
+      e("line",{x1:97,y1:167,x2:123,y2:167,stroke:S,strokeWidth:1,opacity:0.4}),
+      e("path",{d:"M93,126 L95,126 L99,184 L87,194 L83,162 Z",fill:gc("obliques"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("obliques")},onClick:cl("obliques")}),
+      e("path",{d:"M125,126 L127,126 L137,162 L133,194 L121,184 Z",fill:gc("obliques"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("obliques")},onClick:cl("obliques")}),
+      // Kalça (kadına özel)
+      e("ellipse",{cx:97,cy:200,rx:21,ry:19,fill:gc("glutes"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("glutes")},onClick:cl("glutes")}),
+      e("ellipse",{cx:123,cy:200,rx:21,ry:19,fill:gc("glutes"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("glutes")},onClick:cl("glutes")}),
+      e("rect",{x:84,y:213,width:25,height:78,rx:8,fill:gc("quads"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("quads")},onClick:cl("quads")}),
+      e("rect",{x:111,y:213,width:25,height:78,rx:8,fill:gc("quads"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("quads")},onClick:cl("quads")}),
+      e("rect",{x:85,y:297,width:21,height:62,rx:7,fill:gc("calves"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("calves")},onClick:cl("calves")}),
+      e("rect",{x:114,y:297,width:21,height:62,rx:7,fill:gc("calves"),stroke:S,strokeWidth:1,style:{cursor:"pointer",filter:gf("calves")},onClick:cl("calves")}),
+      e("ellipse",{cx:95,cy:366,rx:13,ry:6,fill:"#161A2E"}),
+      e("ellipse",{cx:125,cy:366,rx:13,ry:6,fill:"#161A2E"}),
+      e("ellipse",{cx:65,cy:236,rx:8,ry:6,fill:"#161A2E",stroke:S,strokeWidth:1}),
+      e("ellipse",{cx:155,cy:236,rx:8,ry:6,fill:"#161A2E",stroke:S,strokeWidth:1})
+    );
+  }
+}
+
+// ─── EGZERSIZ ARAMA ───────────────────────────────────────────────
+function ExSearch({ onSelect }) {
+  const [q, setQ] = useState("");
+  const [exList, setExList] = useState(EX);
+  const [apiOk, setApiOk] = useState(false);
+  const [show, setShow] = useState(false);
+  const deb = useRef(null);
+
+  const results = q.trim()
+    ? exList.filter(x => x.name.toLowerCase().includes(q.toLowerCase())).slice(0,12)
+    : [];
+
+  useEffect(() => {
+    fetch("https://wger.de/api/v2/exerciseinfo/?format=json&language=2&limit=100")
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const mapped = (data.results||[])
+          .filter(x => x.translations?.some(t=>t.language===2))
+          .map(x => {
+            const tr = x.translations.find(t=>t.language===2);
+            const p = [...new Set((x.muscles||[]).flatMap(m=>WGER_MAP[m.id]||[]))];
+            const s = [...new Set((x.muscles_secondary||[]).flatMap(m=>WGER_MAP[m.id]||[]))];
+            return {id:"w"+x.id, name:tr.name||"", p, s};
+          }).filter(x=>x.name.length>1);
+        if (mapped.length > 5) {
+          const merged = [...EX];
+          mapped.forEach(a=>{ if(!merged.find(b=>b.name.toLowerCase()===a.name.toLowerCase())) merged.push({...a, primary:a.p, secondary:a.s}); });
+          setExList(merged);
+          setApiOk(true);
+        }
+      }).catch(()=>{});
+  }, []);
+
+  const sel = (ex) => { onSelect(ex); setQ(""); setShow(false); };
+
+  return e("div", {style:{position:"relative"}},
+    e("input", {
+      value: q,
+      onChange: ev => { setQ(ev.target.value); setShow(true); },
+      onFocus: () => results.length && setShow(true),
+      placeholder: "🔍 Egzersiz ara... (" + exList.length + (apiOk?" · wger ✓":"") + ")",
+      style:{width:"100%",background:"#1A1F30",border:"1px solid #2A2E3E",borderRadius:10,padding:"10px 12px",color:"#E8ECF8",fontSize:13,outline:"none"}
+    }),
+    show && results.length > 0 && e("div", {
+      style:{position:"absolute",top:"100%",left:0,right:0,background:"#1A1F30",border:"1px solid #2A2E3E",borderRadius:"0 0 10px 10px",zIndex:300,maxHeight:220,overflowY:"auto",boxShadow:"0 8px 24px #000000BB"}
+    },
+      results.map(ex => {
+        const pArr = ex.p || ex.primary || [];
+        const sArr = ex.s || ex.secondary || [];
+        return e("div", {
+          key: ex.id,
+          className: "dropdown-item",
+          onMouseDown: () => sel(ex),
+          style:{padding:"9px 12px",cursor:"pointer",borderBottom:"1px solid #232840"}
+        },
+          e("div", {style:{fontSize:13,color:"#E8ECF8",fontWeight:600}}, ex.name),
+          e("div", {style:{fontSize:10,color:"#4A5068",marginTop:2}},
+            pArr.length > 0 && e("span", null, e("span",{style:{color:"#4A90D9"}},"Ana: "), pArr.map(m=>MI[m]?.name||m).join(", ")),
+            sArr.length > 0 && e("span", null, " · ", e("span",{style:{color:"#6B9B8A"}},"Yan: "), sArr.map(m=>MI[m]?.name||m).join(", ")),
+            pArr.length===0 && sArr.length===0 && e("span",{style:{color:"#6B7280"}},"Genel kondisyon")
+          )
+        );
+      })
+    )
+  );
+}
+
+// ─── HAFTALIK PROGRAM ─────────────────────────────────────────────
+function WeeklyPlanner({ onDone }) {
+  const [day, setDay] = useState(0);
+  const [wk, setWk] = useState(() => ls("fp_wk", {}));
+  const sv = (w) => { setWk(w); ss("fp_wk", w); };
+  const dk = DK[day];
+  const dayEx = wk[dk] || [];
+
+  const addEx = (ex) => {
+    const pArr = ex.p || ex.primary || [];
+    const sArr = ex.s || ex.secondary || [];
+    sv({...wk, [dk]: [...dayEx, {id:Date.now(), name:ex.name, p:pArr, s:sArr, sets:[{r:12,w:""}]}]});
+  };
+  const delEx = (id) => sv({...wk, [dk]: dayEx.filter(x=>x.id!==id)});
+  const addSet = (id) => sv({...wk, [dk]: dayEx.map(x=>x.id===id?{...x,sets:[...x.sets,{r:x.sets[x.sets.length-1]?.r||12,w:""}]}:x)});
+  const delSet = (id,si) => sv({...wk, [dk]: dayEx.map(x=>x.id===id&&x.sets.length>1?{...x,sets:x.sets.filter((_,i)=>i!==si)}:x)});
+  const updSet = (id,si,f,v) => sv({...wk, [dk]: dayEx.map(x=>x.id===id?{...x,sets:x.sets.map((s,i)=>i===si?{...s,[f]:v}:s)}:x)});
+
+  const markDone = () => {
+    const mm = {};
+    dayEx.forEach(ex=>{
+      ex.p.forEach(m=>{ if(MI[m]) mm[m]={type:"primary"}; });
+      ex.s.forEach(m=>{ if(MI[m]&&!mm[m]) mm[m]={type:"secondary"}; });
+    });
+    onDone(mm);
+  };
+
+  const dc = (i) => (wk[DK[i]]||[]).length;
+  const tm = () => { const s=new Set(); dayEx.forEach(x=>{x.p.forEach(m=>s.add(m));x.s.forEach(m=>s.add(m));}); return s.size; };
+
+  return e("div", {style:{background:"#111827",borderRadius:16,overflow:"hidden",border:"1px solid #1E2235"}},
+    // Gün tabları
+    e("div", {style:{display:"flex",overflowX:"auto",background:"#0D1121",borderBottom:"1px solid #1E2235"}},
+      DAYS.map((d,i) => e("button", {
+        key:i, onClick:()=>setDay(i),
+        style:{flex:"0 0 auto",padding:"10px 11px",background:"transparent",border:"none",
+          borderBottom:day===i?"2px solid #4A90D9":"2px solid transparent",
+          color:day===i?"#4A90D9":"#6B7280",cursor:"pointer",fontSize:11,
+          fontWeight:day===i?700:400,whiteSpace:"nowrap",position:"relative"}
+      },
+        d.slice(0,3),
+        dc(i)>0 && e("span",{style:{position:"absolute",top:4,right:1,background:"#4A90D9",color:"#fff",borderRadius:"50%",width:13,height:13,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}, dc(i))
+      ))
+    ),
+    e("div", {style:{padding:14}},
+      e("div", {style:{marginBottom:12}}, e(ExSearch, {onSelect:addEx})),
+      dayEx.length === 0
+        ? e("div",{style:{textAlign:"center",padding:"20px 0",color:"#4A5068",fontSize:12}},"Egzersiz aramak için yukarıyı kullan 💪")
+        : e("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+            dayEx.map(ex =>
+              e("div",{key:ex.id,style:{background:"#1A1F30",borderRadius:12,padding:12,border:"1px solid #2A2E3E"}},
+                // Başlık satırı
+                e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
+                  e("div",null,
+                    e("div",{style:{fontSize:13,fontWeight:700,color:"#E8ECF8"}},ex.name),
+                    e("div",{style:{fontSize:10,marginTop:3,lineHeight:1.8}},
+                      ex.p.map(m=>e("span",{key:m,style:{background:"#1E3A5F",color:"#4A90D9",borderRadius:4,padding:"1px 6px",marginRight:3,fontSize:9,fontWeight:700}},MI[m]?.name||m)),
+                      ex.s.map(m=>e("span",{key:m,style:{background:"#1E2830",color:"#6B9B8A",borderRadius:4,padding:"1px 6px",marginRight:3,fontSize:9}},MI[m]?.name||m)),
+                      ex.p.length===0&&ex.s.length===0&&e("span",{style:{color:"#4A5068",fontSize:9}},"Genel kondisyon")
+                    )
+                  ),
+                  e("button",{onClick:()=>delEx(ex.id),style:{background:"transparent",border:"none",color:"#4A5068",cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 4px"}},"×")
+                ),
+                // Set tablosu
+                e("div",{style:{display:"grid",gridTemplateColumns:"22px 1fr 1fr 24px",gap:4,alignItems:"center",marginBottom:6}},
+                  e("div",{style:{fontSize:9,color:"#4A5068",textAlign:"center"}},"Set"),
+                  e("div",{style:{fontSize:9,color:"#4A5068",textAlign:"center"}},"Tekrar"),
+                  e("div",{style:{fontSize:9,color:"#4A5068",textAlign:"center"}},"Ağırlık (kg)"),
+                  e("div",null),
+                  ...ex.sets.flatMap((set,si)=>[
+                    e("div",{key:"l"+si,style:{fontSize:11,color:"#6B7280",textAlign:"center",fontWeight:700}},si+1),
+                    e("input",{key:"r"+si,type:"number",value:set.r,onChange:ev=>updSet(ex.id,si,"r",ev.target.value),style:{background:"#232840",border:"1px solid #2A2E3E",borderRadius:6,padding:"7px 4px",color:"#E8ECF8",fontSize:14,textAlign:"center",outline:"none"}}),
+                    e("input",{key:"w"+si,type:"number",value:set.w,onChange:ev=>updSet(ex.id,si,"w",ev.target.value),placeholder:"—",style:{background:"#232840",border:"1px solid #2A2E3E",borderRadius:6,padding:"7px 4px",color:"#E8ECF8",fontSize:14,textAlign:"center",outline:"none"}}),
+                    e("button",{key:"d"+si,onClick:()=>delSet(ex.id,si),style:{background:"transparent",border:"none",color:"#4A5068",cursor:"pointer",fontSize:15,lineHeight:1}},"−")
+                  ])
+                ),
+                e("button",{onClick:()=>addSet(ex.id),style:{width:"100%",background:"#232840",border:"1px dashed #2A2E3E",borderRadius:8,padding:"6px",color:"#4A5068",cursor:"pointer",fontSize:11}},"+ Set ekle")
+              )
+            )
+          ),
+      dayEx.length > 0 && e("button",{onClick:markDone,style:{width:"100%",marginTop:14,background:"linear-gradient(135deg,#1E5C2A,#1A7A30)",border:"1px solid #2E8A40",borderRadius:12,padding:"13px",color:"#00FF88",fontWeight:800,fontSize:13,cursor:"pointer"}},
+        "⚡ "+DAYS[day]+" Antrenmanını Tamamla · "+tm()+" kas grubu işaretlenecek"
+      )
+    )
+  );
+}
+
+// ─── ÖLÇÜMLER ─────────────────────────────────────────────────────
+function Measures({ gender }) {
+  const [m, setM] = useState(() => ls("fp_meas", {height:"",weight:"",arm:"",shoulder:"",chest:"",waist:"",leg:"",back:"",hip:""}));
+  const [bf, setBf] = useState(null);
+  const upd = (k,v) => { const n={...m,[k]:v}; setM(n); ss("fp_meas",n); };
+
+  const calc = () => {
+    const h=parseFloat(m.height),w=parseFloat(m.weight),waist=parseFloat(m.waist);
+    if(!h||!w||!waist){alert("Boy, kilo ve bel ölçüsü giriniz!");return;}
+    let b;
+    if(gender==="male"){b=86.01*Math.log10(waist-38)-70.041*Math.log10(h)+36.76;}
+    else{const hip=parseFloat(m.hip)||waist*1.1;b=163.205*Math.log10(waist+hip-33)-97.684*Math.log10(h)-78.387;}
+    setBf(Math.max(5,Math.min(60,b)).toFixed(1));
+  };
+
+  const fields = [
+    {k:"height",l:"Boy",u:"cm",em:"📐"},{k:"weight",l:"Kilo",u:"kg",em:"⚖️"},
+    {k:"arm",l:"Kol",u:"cm",em:"💪"},{k:"shoulder",l:"Omuz",u:"cm",em:"🏋️"},
+    {k:"chest",l:"Göğüs",u:"cm",em:"🫁"},{k:"waist",l:"Bel",u:"cm",em:"📏"},
+    {k:"leg",l:"Bacak",u:"cm",em:"🦵"},{k:"back",l:"Sırt",u:"cm",em:"🔙"},
+    ...(gender==="female"?[{k:"hip",l:"Kalça",u:"cm",em:"🍑"}]:[])
+  ];
+
+  const bfColor = bf ? (parseFloat(bf)<(gender==="male"?18:25)?"#00FF88":parseFloat(bf)<(gender==="male"?25:32)?"#FFBB00":"#FF4444") : "#fff";
+  const bfLabel = bf ? (()=>{
+    const b=parseFloat(bf);
+    if(gender==="male"){if(b<6)return"🏅 Sporcu";if(b<14)return"💪 Fit — ideal";if(b<18)return"✅ Sağlıklı";if(b<25)return"⚠️ Ortalama";return"🔴 Yüksek";}
+    else{if(b<14)return"🏅 Sporcu";if(b<21)return"💪 Fit — ideal";if(b<25)return"✅ Sağlıklı";if(b<32)return"⚠️ Ortalama";return"🔴 Yüksek";}
+  })() : "";
+
+  return e("div",{style:{marginTop:14,background:"#111827",borderRadius:16,padding:16,border:"1px solid #1E2235"}},
+    e("div",{style:{fontSize:10,color:"#4A5068",marginBottom:13,letterSpacing:1,textTransform:"uppercase"}},"Vücut Ölçümleri"),
+    e("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}},
+      fields.map(f=>e("div",{key:f.k},
+        e("label",{style:{fontSize:9,color:"#6B7280",display:"block",marginBottom:3}},f.em+" "+f.l+" ("+f.u+")"),
+        e("input",{type:"number",value:m[f.k]||"",onChange:ev=>upd(f.k,ev.target.value),placeholder:"—",
+          style:{width:"100%",background:"#1A1F30",border:"1px solid #2A2E3E",borderRadius:8,padding:"9px 10px",color:"#E8ECF8",fontSize:15,outline:"none"}})
+      ))
+    ),
+    e("button",{onClick:calc,style:{width:"100%",background:"linear-gradient(135deg,#4A90D9,#2B6BBF)",border:"none",borderRadius:12,padding:"13px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}},
+      "Yağ Oranını Hesapla"
+    ),
+    bf && e("div",{style:{marginTop:13,background:"linear-gradient(135deg,#1A1F30,#0D1422)",borderRadius:14,padding:15,border:"1px solid #2A3A4A",textAlign:"center"}},
+      e("div",{style:{fontSize:9,color:"#4A5068",letterSpacing:2,marginBottom:5,textTransform:"uppercase"}},"Tahmini Vücut Yağ Oranı"),
+      e("div",{style:{fontSize:42,fontWeight:900,lineHeight:1,color:bfColor}},bf+"%"),
+      e("div",{style:{fontSize:11,color:"#8892A8",marginTop:5}},bfLabel),
+      e("div",{style:{height:7,background:"#1A1F30",borderRadius:4,overflow:"hidden",margin:"12px 0 4px"}},
+        e("div",{style:{height:"100%",width:Math.min(100,(parseFloat(bf)/(gender==="male"?40:50))*100)+"%",background:"linear-gradient(90deg,#00FF88,#FFBB00,#FF4444)",borderRadius:4}})
+      ),
+      m.height && m.weight && e("div",{style:{display:"flex",justifyContent:"space-around",padding:"10px",background:"#1A1F30",borderRadius:10,marginTop:10}},
+        e("div",null,
+          e("div",{style:{fontSize:15,fontWeight:700,color:"#4A90D9"}},(parseFloat(m.weight)/((parseFloat(m.height)/100)**2)).toFixed(1)),
+          e("div",{style:{fontSize:8,color:"#6B7280"}},"BMI")
+        ),
+        m.waist && e("div",null,
+          e("div",{style:{fontSize:15,fontWeight:700,color:"#4A90D9"}},(parseFloat(m.waist)/parseFloat(m.height)).toFixed(2)),
+          e("div",{style:{fontSize:8,color:"#6B7280"}},"Bel/Boy")
+        ),
+        e("div",null,
+          e("div",{style:{fontSize:15,fontWeight:700,color:"#4A90D9"}},(parseFloat(m.weight)*(1-parseFloat(bf)/100)).toFixed(1)+"kg"),
+          e("div",{style:{fontSize:8,color:"#6B7280"}},"Yağsız Kütle")
+        )
+      )
+    )
+  );
+}
+
+// ─── ANA UYGULAMA ─────────────────────────────────────────────────
+function App() {
+  const [gender, setGender] = useState(() => ls("fp_gen","male"));
+  const [am, setAm] = useState(() => ls("fp_am", {}));
+  const [, setTick] = useState(0);
+  const [sel, setSel] = useState(null);
+  const [tab, setTab] = useState("map");
+
+  useEffect(() => { const t=setInterval(()=>setTick(n=>n+1),60000); return()=>clearInterval(t); },[]);
+  useEffect(() => { ss("fp_am",am); },[am]);
+  useEffect(() => { ss("fp_gen",gender); },[gender]);
+
+  const clickMuscle = (m) => {
+    setSel(m);
+    setAm(p=>({...p,[m]:{startTime:Date.now(),isPrimary:true}}));
+  };
+
+  const fromWorkout = (mm) => {
+    const now = Date.now();
+    setAm(p=>{
+      const n={...p};
+      Object.entries(mm).forEach(([m,info])=>{ if(MI[m]) n[m]={startTime:now,isPrimary:info.type==="primary"}; });
+      return n;
+    });
+    setTab("map");
+    const keys = Object.keys(mm);
+    if(keys[0]) setTimeout(()=>setSel(keys[0]),150);
+  };
+
+  const resetM = (m) => { setAm(p=>{const n={...p};delete n[m];return n;}); if(sel===m)setSel(null); };
+  const resetAll = () => { setAm({}); setSel(null); };
+
+  const getStatus = (m) => {
+    const a=am[m]; if(!a) return null;
+    const el=(Date.now()-a.startTime)/3600000, tot=MI[m].rest;
+    return {elapsed:el,total:tot,remaining:Math.max(0,tot-el),done:el>=tot};
+  };
+
+  const akeys = Object.keys(am);
+
+  const ts = (t) => ({
+    flex:1,padding:"11px 4px",background:"transparent",border:"none",
+    borderBottom:tab===t?"2px solid #4A90D9":"2px solid transparent",
+    color:tab===t?"#4A90D9":"#6B7280",cursor:"pointer",fontSize:10,
+    fontWeight:tab===t?700:400,
+  });
+
+  return e("div",{style:{minHeight:"100vh",background:"linear-gradient(135deg,#0A0E1A 0%,#0D1328 60%,#080C18 100%)",paddingBottom:40}},
+
+    // HEADER
+    e("div",{style:{background:"linear-gradient(90deg,#0A0E1A,#111827,#0A0E1A)",borderBottom:"1px solid #1E2235",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}},
+      e("div",null,
+        e("div",{style:{fontSize:9,color:"#4A90D9",letterSpacing:3,textTransform:"uppercase",fontWeight:700}},"MUSCLE TRACKER"),
+        e("div",{style:{fontSize:19,fontWeight:900,color:"#E8ECF8",letterSpacing:-0.5}},"FitPulse")
+      ),
+      e("div",{style:{display:"flex",background:"#1A1F30",borderRadius:10,padding:3,gap:2,border:"1px solid #2A2E3E"}},
+        ["male","female"].map(g=>e("button",{key:g,onClick:()=>setGender(g),style:{
+          padding:"6px 10px",borderRadius:7,border:"none",
+          background:gender===g?(g==="male"?"#4A90D9":"#D94AB0"):"transparent",
+          color:gender===g?"#fff":"#6B7280",fontWeight:700,fontSize:11,cursor:"pointer"
+        }},g==="male"?"♂ Erkek":"♀ Kadın"))
+      )
+    ),
+
+    // TABS
+    e("div",{style:{display:"flex",borderBottom:"1px solid #1E2235",background:"#0D1121"}},
+      e("button",{style:ts("map"),onClick:()=>setTab("map")},"🫁 KAS HARİTASI"),
+      e("button",{style:ts("weekly"),onClick:()=>setTab("weekly")},
+        "📅 PROGRAM",
+        akeys.length>0&&e("span",{style:{marginLeft:4,background:"#4A90D9",color:"#fff",borderRadius:"50%",width:15,height:15,fontSize:8,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700}},akeys.length)
+      ),
+      e("button",{style:ts("measure"),onClick:()=>setTab("measure")},"📏 ÖLÇÜMLER")
+    ),
+
+    e("div",{style:{maxWidth:640,margin:"0 auto",padding:"0 12px"}},
+
+      // ── KAS HARİTASI ──
+      tab==="map" && e("div",{style:{display:"flex",gap:10,marginTop:14,alignItems:"flex-start"}},
+        // SVG panel
+        e("div",{style:{background:"linear-gradient(180deg,#111827,#0D1121)",borderRadius:16,padding:"10px 4px",border:"1px solid #1E2235",flex:"0 0 164px",display:"flex",flexDirection:"column",alignItems:"center"}},
+          e("div",{style:{fontSize:8,color:"#4A5068",marginBottom:5,letterSpacing:1}},"KASA TIKLA"),
+          e(BodyMap,{gender,activeMuscles:am,onMuscleClick:clickMuscle}),
+          akeys.length>0&&e("button",{onClick:resetAll,style:{marginTop:6,background:"transparent",border:"1px solid #2A2E3E",borderRadius:6,padding:"3px 10px",color:"#6B7280",fontSize:9,cursor:"pointer"}},"Tümünü Sıfırla")
+        ),
+        // Sağ panel
+        e("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:8}},
+          // Seçili kas kartı
+          sel && (()=>{
+            const st=getStatus(sel), info=MI[sel];
+            const color=st?rc(st.elapsed,st.total):"#2A2E3E";
+            const isPrim=am[sel]?.isPrimary;
+            return e("div",{style:{background:"linear-gradient(135deg,#111827,#0D1422)",borderRadius:14,padding:13,border:"1px solid "+color+"44",boxShadow:"0 0 18px "+color+"22"}},
+              e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}},
+                e("div",null,
+                  e("div",{style:{fontSize:9,color:"#4A5068",letterSpacing:1}},"AKTİF KAS ",
+                    isPrim!==undefined&&e("span",{style:{color:isPrim?"#4A90D9":"#6B9B8A"}},isPrim?"· ANA":"· YAN")
+                  ),
+                  e("div",{style:{fontSize:17,fontWeight:800,color}},info.name)
+                ),
+                e("button",{onClick:()=>resetM(sel),style:{background:"#1A1F30",border:"1px solid #2A2E3E",color:"#6B7280",borderRadius:7,padding:"4px 9px",fontSize:11,cursor:"pointer"}},"↺")
+              ),
+              st&&e("div",null,
+                e("div",{style:{height:5,background:"#1A1F30",borderRadius:3,overflow:"hidden",marginBottom:6}},
+                  e("div",{style:{height:"100%",width:Math.min(100,(st.elapsed/st.total)*100)+"%",background:"linear-gradient(90deg,#FF4444,"+color+")",borderRadius:3,transition:"width 0.5s"}})
+                ),
+                e("div",{style:{display:"flex",justifyContent:"space-between",fontSize:11}},
+                  e("span",{style:{color:"#6B7280"}},"Toplam: "+info.rest+"sa"),
+                  e("span",{style:{color,fontWeight:700}},st.done?"✓ Hazır!":ft(st.remaining))
+                )
+              )
+            );
+          })(),
+          // Tüm aktif kaslar listesi
+          akeys.length>0&&e("div",{style:{background:"#111827",borderRadius:13,padding:11,border:"1px solid #1E2235"}},
+            e("div",{style:{fontSize:8,color:"#4A5068",letterSpacing:1,marginBottom:7,textTransform:"uppercase"}},"Dinlenme Takibi"),
+            akeys.map(m=>{
+              const st=getStatus(m), color=st?rc(st.elapsed,st.total):"#2A2E3E";
+              const isPrim=am[m]?.isPrimary;
+              return e("div",{key:m,onClick:()=>setSel(m),style:{
+                display:"flex",alignItems:"center",gap:7,padding:"6px 7px",
+                background:sel===m?"#1A1F30":"transparent",borderRadius:8,cursor:"pointer",
+                border:"1px solid "+(sel===m?color+"44":"transparent"),marginBottom:3
+              }},
+                e("div",{style:{width:7,height:7,borderRadius:"50%",background:color,boxShadow:"0 0 5px "+color,flexShrink:0}}),
+                e("span",{style:{flex:1,fontSize:11,color:"#C0C8E0"}},MI[m].name),
+                isPrim!==undefined&&e("span",{style:{fontSize:8,color:isPrim?"#4A90D9":"#6B9B8A",marginRight:3}},isPrim?"Ana":"Yan"),
+                e("span",{style:{fontSize:10,color,fontWeight:600}},st?.done?"Hazır ✓":ft(st?.remaining||0))
+              );
+            })
+          ),
+          // Boş durum
+          akeys.length===0&&!sel&&e("div",{style:{background:"#111827",borderRadius:13,padding:12,border:"1px solid #1E2235"}},
+            e("div",{style:{fontSize:9,color:"#4A5068",marginBottom:9,letterSpacing:1,textTransform:"uppercase"}},"RENK REHBERİ"),
+            [{color:"#FF2222",label:"Yeni çalışıldı — dinlen"},{color:"#FFBB00",label:"Toparlanıyor..."},{color:"#00FF88",label:"Hazır — tekrar antrenman!"}]
+              .map(x=>e("div",{key:x.color,style:{display:"flex",alignItems:"center",gap:7,marginBottom:7}},
+                e("div",{style:{width:22,height:6,borderRadius:3,background:x.color,boxShadow:"0 0 5px "+x.color+"88",flexShrink:0}}),
+                e("span",{style:{fontSize:10,color:"#8892A8"}},x.label)
+              )),
+            e("div",{style:{marginTop:10,padding:"8px 9px",background:"#1A1F30",borderRadius:8}},
+              e("div",{style:{fontSize:10,color:"#6B9B8A"}},
+                "💡 ",e("strong",{style:{color:"#E8ECF8"}},"PROGRAM"),
+                " sekmesine geç → egzersiz ekle → 'Antrenmanı Tamamla' → kaslar otomatik işaretlenir!"
+              )
+            )
+          )
+        )
+      ),
+
+      // ── HAFTALIK PROGRAM ──
+      tab==="weekly"&&e("div",{style:{marginTop:14}},
+        e(WeeklyPlanner,{onDone:fromWorkout}),
+        e("div",{style:{marginTop:10,background:"#111827",borderRadius:11,padding:"9px 13px",border:"1px solid #1E2235"}},
+          e("div",{style:{fontSize:10,color:"#4A5068"}},
+            "ℹ️ wger.de veritabanından yüklenir. ",
+            e("span",{style:{color:"#4A90D9"}},"Mavi")," = ana kas · ",
+            e("span",{style:{color:"#6B9B8A"}},"Yeşil")," = yan kas. Program localStorage'a kaydedilir."
+          )
+        )
+      ),
+
+      // ── ÖLÇÜMLER ──
+      tab==="measure"&&e(Measures,{gender})
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+</script>
+</body>
+</html>
